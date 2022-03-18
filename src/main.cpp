@@ -1,38 +1,187 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_MCP4725.h>
+
+#include "Adafruit_MCP4725.h"
+#include "can_common.h"
 
 #include "settings.h"
 
+mcp2515_can can(PIN_CAN_CS);
 Adafruit_MCP4725 dac;
 
-uint16_t value = 0;
+// Current value from 0-4095 being output to DAC
+uint16_t currentOutput = 0;
 
+uint32_t lastUpdate = 0;
+uint32_t lastHeartbeat = 0;
+
+// This struct contains all the components of a CAN message. dataLength must be <= 8, 
+// and the first [dataLength] positions of data[] must contain valid data
+typedef uint8_t CanBuffer[8];
+struct CanMessage {
+        uint32_t id;
+        uint8_t dataLength;
+        CanBuffer data;
+};
+
+/**
+ * @brief Converts CAN status message to readable output
+ * 
+ * @param errorCode CAN status message
+ * @return Readable output
+ * */
+String getCanError(uint8_t errorCode){
+    switch(errorCode){
+        case CAN_OK: 
+            return "CAN OK";
+            break;
+        case CAN_FAILINIT:
+            return "CAN FAIL INIT";
+            break;
+        case CAN_FAILTX:
+            return "CAN FAIL TX";
+            break;
+        case CAN_MSGAVAIL:
+            return "CAN MSG AVAIL";
+            break;
+        case CAN_NOMSG:
+            return "CAN NO MSG";
+            break;
+        case CAN_CTRLERROR:
+            return "CAN CTRL ERROR";
+            break;
+        case CAN_GETTXBFTIMEOUT:
+            return "CAN TX BF TIMEOUT";
+            break;
+        case CAN_SENDMSGTIMEOUT:    
+            return "CAN SEND MSG TIMEOUT";
+            break;
+        default:
+            return "CAN FAIL";
+            break;
+    }
+}
+
+/**
+ * @brief Scales raw throttle input by squaring it, and then dividing by scaling factor.
+ *          This has the effect of applying a simple curve, such that the throttle is not 
+ *          very sensitive on initial press.
+ * 
+ * @param input Throttle value from 0-255
+ * @return Voltage value from 0-4095
+ * */
+uint16_t scaleThrottle(uint8_t input) {
+    uint32_t inputAdj = input + 1;
+    uint32_t output = (inputAdj * inputAdj) / DAC_VALUE_TO_INPUT;
+
+    if(output) {
+        output--;
+    }
+
+    return output;
+}
+
+/**
+ *  SETUP
+ * */
 void setup() {
+
+    // Start Serial Monitor
     if(DEBUG_SERIAL_EN) {
         Serial.begin(SERIAL_MONITOR_SPEED);
     }
 
+    DEBUG_SERIAL_LN();
+	DEBUG_SERIAL_LN("******************************");      
+	DEBUG_SERIAL_LN("  CAN TO ANALOG THROTTLEATOR  ");                                                    
+	DEBUG_SERIAL_LN("******************************");
+    DEBUG_SERIAL_LN();
+    
+    // Set power pins for DAC
     pinMode(PIN_DAC_VCC, OUTPUT);
     pinMode(PIN_DAC_GND, OUTPUT);
-
     digitalWrite(PIN_DAC_VCC, HIGH);
     digitalWrite(PIN_DAC_GND, LOW);
     
-    if(dac.begin(I2C_ADDR_DAC)) {
-        DEBUG_SERIAL_LN("DAC INITIALIZED SUCCESSFULLY!");
-    } else {
-        DEBUG_SERIAL_LN("DAC INITIALIZATION ERROR!");
+    // Start DAC
+    while(!dac.begin(I2C_ADDR_DAC)) {
+        DEBUG_SERIAL_LN("DAC INIT: DAC ERROR");
+        delay(250);
     }
+    DEBUG_SERIAL_LN("DAC INIT: DAC OK");
+
+    // Set DAC to 0 and save it in memory
+    dac.setVoltage(0, true);
+
+    // Start CAN
+    uint8_t error = can.begin(CAN_SPEED, CAN_CONTROLLER_SPEED);
+    DEBUG_SERIAL_LN("CAN INIT: " + getCanError(error));
+    DEBUG_SERIAL_LN();
 }
 
+/**
+ *  LOOP
+ * */
 void loop() {
-    if(dac.setVoltage(value, false)) {
-        DEBUG_SERIAL_LN("DAC SET TO " + String(value));
-    } else {
-        DEBUG_SERIAL_LN("DAC COMM ERROR! " + String(value));
+
+    uint16_t newOutput = currentOutput;
+
+    // Listen for CAN messages
+    if (can.checkReceive() == CAN_MSGAVAIL) {
+        CanMessage message;
+        message.dataLength = 0;
+        can.readMsgBuf(&message.dataLength, message.data); 
+        message.id = can.getCanId();
+
+        // If a new throttle message is received, scale it
+        if(message.id == CAN_STEERING_THROTTLE) {
+            newOutput = scaleThrottle(message.data[0]);
+            lastUpdate = millis();
+        }
+
+        // Debug all received messages to serial monitor
+        if(CAN_DEBUG_RECEIVE) {
+
+            Serial.println("-----------------------------");
+            Serial.print("CAN MESSAGE RECEIVED - ID: 0x");
+            Serial.println(message.id, HEX);
+
+            for (int i = 0; i < message.dataLength; i++) {
+                Serial.print("0x");
+                Serial.print(message.data[i], HEX);
+                Serial.print("\t");
+            }
+            Serial.println();
+        }
+
     }
 
-    if(++value == 4096) value = 0;
+    // If the new output is different than the old output, update the voltage on the DAC
+    if(newOutput != currentOutput) {
+        currentOutput = newOutput;
+        dac.setVoltage(currentOutput, false); 
+        DEBUG_SERIAL_LN("Voltage set to: " + String(currentOutput / DAC_VALUE_TO_V) + "v");
+    }
+
+    // If the output is not 0 and it's been more than a certain amount of time since the last
+    // throttle CAN message, set the output to 0 as a safety measure
+    if(currentOutput && (millis() > lastUpdate + STALE_TIME)) {
+        currentOutput = 0;
+        dac.setVoltage(currentOutput, false);
+        DEBUG_SERIAL_LN("ERROR: NO DATA - Output set to 0v");
+    }
+
+    // Send a periodic heartbeat CAN message to let other devices on the CAN bus know we are connected
+    if(millis() > lastHeartbeat + HEARTBEAT_TIME) {
+        lastHeartbeat = millis();
+
+        CanMessage msg;
+        msg.id = THROTTLE_HEARTBEAT;
+        msg.dataLength = 1;
+        msg.data[0] = 0x1;
+        uint8_t error = can.sendMsgBuf(msg.id, CAN_FRAME, msg.dataLength, msg.data);
+        DEBUG_SERIAL_LN("HEARTBEAT SEND: " + getCanError(error));
+    }
 
 }
+
