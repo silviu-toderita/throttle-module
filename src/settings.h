@@ -20,9 +20,12 @@
 #define CAN_SPEED               CAN_500KBPS
 #define CAN_CONTROLLER_SPEED    MCP_8MHz
 #define CAN_FRAME               0x0
+
 // Turn on to print received CAN messages to serial monitor
 #define CAN_DEBUG_RECEIVE       0
 
+// Turn on to scale exponentially
+#define SCALE_EXP               0
 // Scaling factors
 #define DAC_VALUE_TO_V          819.2
 #define DAC_VALUE_TO_INPUT      16U

@@ -71,8 +71,13 @@ String getCanError(uint8_t errorCode){
  * @return Voltage value from 0-4095
  * */
 uint16_t scaleThrottle(uint8_t input) {
-    uint32_t inputAdj = input + 1;
-    uint32_t output = (inputAdj * inputAdj) / DAC_VALUE_TO_INPUT;
+    uint32_t output = input + 1;
+
+    if(SCALE_EXP) {
+        output = (output * output) / DAC_VALUE_TO_INPUT;
+    } else {
+        output = output * 16;
+    }
 
     if(output) {
         output--;
