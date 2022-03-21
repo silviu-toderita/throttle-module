@@ -12,8 +12,6 @@
 #define HEARTBEAT_TIME          1000
 
 #define PIN_CAN_CS              2
-#define PIN_DAC_VCC             A3
-#define PIN_DAC_GND             A2
 #define PIN_LED                 4
 
 #define I2C_ADDR_DAC            0x60

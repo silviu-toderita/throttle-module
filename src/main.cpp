@@ -94,6 +94,7 @@ uint16_t scaleThrottle(uint8_t input) {
  * */
 void setup() {
 
+    // Init and turn on LED
     pinMode(PIN_LED, OUTPUT);
     digitalWrite(PIN_LED, HIGH);
 
@@ -103,16 +104,10 @@ void setup() {
     }
 
     DEBUG_SERIAL_LN();
-	DEBUG_SERIAL_LN("******************************");      
-	DEBUG_SERIAL_LN("  CAN TO ANALOG THROTTLEATOR  ");                                                    
-	DEBUG_SERIAL_LN("******************************");
+	DEBUG_SERIAL_LN("*************************");      
+	DEBUG_SERIAL_LN("    CAN  THROTTLEATOR    ");                                                    
+	DEBUG_SERIAL_LN("*************************");
     DEBUG_SERIAL_LN();
-    
-    // Set power pins for DAC
-    pinMode(PIN_DAC_VCC, OUTPUT);
-    pinMode(PIN_DAC_GND, OUTPUT);
-    digitalWrite(PIN_DAC_VCC, HIGH);
-    digitalWrite(PIN_DAC_GND, LOW);
     
     // Start DAC
     while(!dac.begin(I2C_ADDR_DAC)) {
@@ -197,6 +192,7 @@ void loop() {
         DEBUG_SERIAL_LN("HEARTBEAT SEND: " + getCanError(error));
     }
 
+    // If LED should be flashing, flash it
     if((millis() > lastLedFlash + LED_FLASH_INTERVAL) && ledFlash) {
         lastLedFlash = millis();
         digitalWrite(PIN_LED, !digitalRead(PIN_LED));
