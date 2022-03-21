@@ -3,7 +3,7 @@
 #include "mcp2515_can.h"
 
 // Turn on to enable serial monitor
-#define DEBUG_SERIAL_EN         1
+#define DEBUG_SERIAL_EN         0
 #define SERIAL_MONITOR_SPEED    115200
 
 // After this time in ms of no throttle CAN messages, throttle set to 0
