@@ -3,7 +3,7 @@
 #include "mcp2515_can.h"
 
 // Turn on to enable serial monitor
-#define DEBUG_SERIAL_EN         0
+#define DEBUG_SERIAL_EN         1
 #define SERIAL_MONITOR_SPEED    115200
 
 // After this time in ms of no throttle CAN messages, throttle set to 0
@@ -14,6 +14,7 @@
 #define PIN_CAN_CS              2
 #define PIN_DAC_VCC             A3
 #define PIN_DAC_GND             A2
+#define PIN_LED                 4
 
 #define I2C_ADDR_DAC            0x60
 
@@ -29,6 +30,8 @@
 // Scaling factors
 #define DAC_VALUE_TO_V          819.2
 #define DAC_VALUE_TO_INPUT      16U
+
+#define LED_FLASH_INTERVAL      125
 
 // Serial monitor macros
 #if DEBUG_SERIAL_EN

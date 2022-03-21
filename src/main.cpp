@@ -14,6 +14,9 @@ uint16_t currentOutput = 0;
 
 uint32_t lastUpdate = 0;
 uint32_t lastHeartbeat = 0;
+uint32_t lastLedFlash = 0;
+
+bool ledFlash = false;
 
 // This struct contains all the components of a CAN message. dataLength must be <= 8, 
 // and the first [dataLength] positions of data[] must contain valid data
@@ -91,6 +94,9 @@ uint16_t scaleThrottle(uint8_t input) {
  * */
 void setup() {
 
+    pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, HIGH);
+
     // Start Serial Monitor
     if(DEBUG_SERIAL_EN) {
         Serial.begin(SERIAL_MONITOR_SPEED);
@@ -142,6 +148,7 @@ void loop() {
         if(message.id == CAN_STEERING_THROTTLE) {
             newOutput = scaleThrottle(message.data[0]);
             lastUpdate = millis();
+            ledFlash = true;
         }
 
         // Debug all received messages to serial monitor
@@ -174,6 +181,8 @@ void loop() {
         currentOutput = 0;
         dac.setVoltage(currentOutput, false);
         DEBUG_SERIAL_LN("ERROR: NO DATA - Output set to 0v");
+        ledFlash = false;
+        digitalWrite(PIN_LED, HIGH);
     }
 
     // Send a periodic heartbeat CAN message to let other devices on the CAN bus know we are connected
@@ -186,6 +195,11 @@ void loop() {
         msg.data[0] = 0x1;
         uint8_t error = can.sendMsgBuf(msg.id, CAN_FRAME, msg.dataLength, msg.data);
         DEBUG_SERIAL_LN("HEARTBEAT SEND: " + getCanError(error));
+    }
+
+    if((millis() > lastLedFlash + LED_FLASH_INTERVAL) && ledFlash) {
+        lastLedFlash = millis();
+        digitalWrite(PIN_LED, !digitalRead(PIN_LED));
     }
 
 }
