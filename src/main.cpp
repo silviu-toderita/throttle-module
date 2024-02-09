@@ -18,6 +18,10 @@ uint32_t lastLedFlash = 0;
 
 bool ledFlash = false;
 
+uint16_t outputSamples[20] = {0};
+int sampleIndex = 0;
+uint32_t rollingSum = 0;
+
 // This struct contains all the components of a CAN message. dataLength must be <= 8, 
 // and the first [dataLength] positions of data[] must contain valid data
 typedef uint8_t CanBuffer[8];
@@ -165,7 +169,20 @@ void loop() {
 
     // If the new output is different than the old output, update the voltage on the DAC
     if(newOutput != currentOutput) {
-        currentOutput = newOutput;
+
+        if (SMOOTH_THROTTLE) {
+            rollingSum -= outputSamples[sampleIndex];
+            rollingSum += newOutput;
+            outputSamples[sampleIndex] = newOutput;
+            sampleIndex = (sampleIndex + 1) % 20;
+
+            // Calculate the rolling average
+            uint16_t rollingAverage = rollingSum / 20;
+            currentOutput = rollingAverage;
+        } else {
+            currentOutput = newOutput;
+        }
+        
         dac.setVoltage(currentOutput, false); 
         DEBUG_SERIAL_LN("Voltage set to: " + String(currentOutput / DAC_VALUE_TO_V) + "v");
     }
