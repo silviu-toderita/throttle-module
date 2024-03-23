@@ -19,6 +19,7 @@ uint32_t lastLedFlash = 0;
 bool ledFlash = false;
 
 uint16_t outputSamples[DATA_POINTS] = {0};
+
 int sampleIndex = 0;
 uint32_t rollingSum = 0;
 
@@ -170,15 +171,19 @@ void loop() {
     // If the new output is different than the old output, update the voltage on the DAC
     if(newOutput != currentOutput) {
 
-        rollingSum -= outputSamples[sampleIndex];
-        rollingSum += newOutput;
-        outputSamples[sampleIndex] = newOutput;
-        sampleIndex = (sampleIndex + 1) % DATA_POINTS;
+        if (SMOOTH_THROTTLE) {
+            rollingSum -= outputSamples[sampleIndex];
+            rollingSum += newOutput;
+            outputSamples[sampleIndex] = newOutput;
+            sampleIndex = (sampleIndex + 1) % DATA_POINTS;
 
-        // Calculate the rolling average
-        uint16_t rollingAverage = rollingSum / DATA_POINTS;
-        
-        currentOutput = rollingAverage;
+            // Calculate the rolling average
+            uint16_t rollingAverage = rollingSum / DATA_POINTS;
+
+        } else {
+            currentOutput = newOutput;
+        }
+
         dac.setVoltage(currentOutput, false); 
         DEBUG_SERIAL_LN("Voltage set to: " + String(currentOutput / DAC_VALUE_TO_V) + "v");
     }
