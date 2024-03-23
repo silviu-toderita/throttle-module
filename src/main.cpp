@@ -18,7 +18,8 @@ uint32_t lastLedFlash = 0;
 
 bool ledFlash = false;
 
-uint16_t outputSamples[20] = {0};
+uint16_t outputSamples[DATA_POINTS] = {0};
+
 int sampleIndex = 0;
 uint32_t rollingSum = 0;
 
@@ -174,15 +175,15 @@ void loop() {
             rollingSum -= outputSamples[sampleIndex];
             rollingSum += newOutput;
             outputSamples[sampleIndex] = newOutput;
-            sampleIndex = (sampleIndex + 1) % 20;
+            sampleIndex = (sampleIndex + 1) % DATA_POINTS;
 
             // Calculate the rolling average
-            uint16_t rollingAverage = rollingSum / 20;
-            currentOutput = rollingAverage;
+            uint16_t rollingAverage = rollingSum / DATA_POINTS;
+	    currentOutput = rollingAverage;
         } else {
             currentOutput = newOutput;
         }
-        
+
         dac.setVoltage(currentOutput, false); 
         DEBUG_SERIAL_LN("Voltage set to: " + String(currentOutput / DAC_VALUE_TO_V) + "v");
     }
@@ -194,6 +195,7 @@ void loop() {
         dac.setVoltage(currentOutput, false);
         DEBUG_SERIAL_LN("ERROR: NO DATA - Output set to 0v");
         ledFlash = false;
+        
         digitalWrite(PIN_LED, HIGH);
     }
 
@@ -216,4 +218,3 @@ void loop() {
     }
 
 }
-
