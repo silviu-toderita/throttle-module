@@ -179,7 +179,7 @@ void loop() {
 
             // Calculate the rolling average
             uint16_t rollingAverage = rollingSum / DATA_POINTS;
-
+	    currentOutput = rollingAverage;
         } else {
             currentOutput = newOutput;
         }
